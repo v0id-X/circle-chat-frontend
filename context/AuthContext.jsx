@@ -3,14 +3,15 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { useEffect } from "react";
 import {io} from 'socket.io-client'
-import { generateKeys,toB64String } from "../src/utils/e2ee";
-import {openDB} from "idb"
+//import { generateKeys,toB64String } from "../src/utils/e2ee";
+//import {openDB} from "idb"
+import { generateAndWrapKeys,unwrapPrivateKey } from "../src/utils/e2ee";
 import { useNavigate } from "react-router-dom";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL
 axios.defaults.baseURL = backendUrl
 
-const getChatDB = async () => {
+/*const getChatDB = async () => {
                     return await openDB('CircleChat', 3, { 
                         upgrade(db) {
                         if (!db.objectStoreNames.contains('key_store')) {
@@ -19,7 +20,7 @@ const getChatDB = async () => {
                         }
                         },
                     });
-                    };
+                    }; */
 
 export const AuthContext = createContext()
 
@@ -27,7 +28,7 @@ export const AuthProvider = ({children})=>{
 
     const [token,setToken] = useState(localStorage.getItem("token"))
     const [authUser,setAuthUser] = useState(null)
-    const [privateKey,setPrivateKey] = useState(null)
+    const [privateKey,setPrivateKey] = useState(sessionStorage.getItem("privateKey"))
     const [onlineUsers,setOnlineUsers] = useState([])
     const [socket,setSockets] = useState(null)
 
@@ -43,7 +44,7 @@ export const AuthProvider = ({children})=>{
         }
     }
 
-    const setupEncryption = async () => {
+    /* const setupEncryption = async () => {
     const existingKey = await getPrivateKey(); 
 
     if (existingKey) {
@@ -62,27 +63,53 @@ export const AuthProvider = ({children})=>{
     setPrivateKey(privB64);
 
     await axios.put(`/api/auth/public-key-update`, { publicKey: pubB64 });
-};
+}; */
 
     //Login to handle auth and sockets conn
 
     const login = async(state, credentials)=>{
         try {
-            const {data} = await axios.post(`/api/auth/${state}`,credentials)
+
+            let payload = {...credentials}
+
+            if(state === 'signup'){
+
+                console.log("ENTIRE CREDENTIALS OBJECT:", credentials);
+    console.log("PASSWORD TYPE:", typeof credentials.password, "| VALUE:", credentials.password);
+
+                const cryptoPayload = await generateAndWrapKeys(credentials.password)
+                payload = {...payload, ...cryptoPayload}
+            }
+
+            const {data} = await axios.post(`/api/auth/${state}`,payload)
             if(data.success){
                 setAuthUser(data.userData)
                 connectSocket(data.userData)
                 axios.defaults.headers.common["token"] = data.token
                 setToken(data.token)
                 localStorage.setItem("token",data.token)
-                setupEncryption()
+                //setupEncryption()
 
+                try {
+                    const rawPrivateKeyB64 = await unwrapPrivateKey(
+                        credentials.password,
+                        data.userData.salt,
+                        data.userData.nonce,
+                        data.userData.encryptedPrivateKey
+                    )
+
+                    setPrivateKey(rawPrivateKeyB64)
+                    sessionStorage.setItem("privateKey",rawPrivateKeyB64)
+
+                } catch (error) {
+                    toast.error("Account accessed, but failed to load chat history")
+                }
                 toast.success(data.message)
             }else{
                 toast.error(data.message)
             }
         } catch (error) {
-            toast.error(error.message)
+            toast.error(error.response?.data?.message || error.message)
         }
     }
 
@@ -91,7 +118,7 @@ export const AuthProvider = ({children})=>{
 
             
 
-    const updatePublicKey = async ()=>{
+   /* const updatePublicKey = async ()=>{
                 const userKeys =  generateKeys()
                 console.log(userKeys.publicKey)
                 console.log(userKeys.privateKey)
@@ -111,9 +138,9 @@ export const AuthProvider = ({children})=>{
                         toast.success(data.message)
                     }
             }
-        }
+        } */
 
-        const getPrivateKey = async ()=>{
+       /* const getPrivateKey = async ()=>{
             try {
                 const db = await getChatDB()
                 const privateKey = await db.get('key_store','user_private_key')
@@ -130,7 +157,7 @@ export const AuthProvider = ({children})=>{
                 return null
             }
             
-        }
+        } */
 
     //Logout and disconn socket
     const logout = async()=>{
@@ -139,8 +166,9 @@ export const AuthProvider = ({children})=>{
         setAuthUser(null)
         setOnlineUsers([])
        delete axios.defaults.headers.common["token"] 
-        const db = await getChatDB()
-        await db.clear('key_store')
+        //const db = await getChatDB()
+        //await db.clear('key_store')
+        sessionStorage.removeItem("privateKey")
         setPrivateKey(null)
         toast.success("Logged Out")
         socket?.disconnect()
@@ -183,7 +211,7 @@ export const AuthProvider = ({children})=>{
             axios.defaults.headers.common["token"] = token
         }
         checkAuth()
-        getPrivateKey()
+        //getPrivateKey()
     },[])
 
     const value = {
@@ -194,7 +222,6 @@ export const AuthProvider = ({children})=>{
         login,
         logout,
         updateProfile,
-        updatePublicKey,
         privateKey
     }
 
