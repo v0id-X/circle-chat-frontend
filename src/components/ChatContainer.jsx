@@ -29,7 +29,6 @@ const ChatContainer = () => {
     setInput('')
   }
 
-  //image handling
   const handleSendImage = async(e)=>{
     const file = e.target.files[0];
     if(!file || !file.type.startsWith('image/')){
@@ -102,7 +101,6 @@ const ChatContainer = () => {
 
   return selectedUser ? (
     <div className='h-full overflow-scroll relative backdrop-blur-lg'>
-      {/*----header-----*/}
         <div className='flex items-center gap-3 py-3 mx-4 border-b border-stone-500'>
             <img src={selectedUser.profilePic || assets.avatar_icon} alt="" className='w-8 rounded-full' />
               <p className='flex-1 test-lg text-white flex items-center gap-2'>
@@ -113,7 +111,6 @@ const ChatContainer = () => {
               <img onClick={()=>setSelectedUser(null)} src={assets.arrow_icon} alt="" className='md:hidden max-w-7' />
               <img src={assets.help_icon} alt='' className='max-md:hidden max-w-5' />
         </div>
-        {/*----chat area----*/}
         <div ref={chatBoxRef} onScroll={handleScroll} className='flex flex-col h-[calc(100%-120px)] overflow-y-scroll p-3 pb-6'>
           {messages.map((msg,index)=>(
             <div key={index} className={`flex items-end gap-2 justify-end ${msg.senderId !== authUser._id && 'flex-row-reverse'}`}>
@@ -149,8 +146,6 @@ const ChatContainer = () => {
   )}
           <div ref={scrollEnd}></div>
         </div>
-
-         {/*----bottom area-----*/} 
           <div className='absolute bottom-0 left-0 right-0 flex items-center gap-3 p-3'>
             <div className='flex-1 flex items-center bg-gray-100/12 px-3 rounded-full'>
               <input onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=>e.key === 'Enter' ? handleSendMessage(e) : null} type='text' value={input} placeholder='write your message here...'  className='flex-1 text-sm p-3 border-none rounded-lg outline-none text-white placeholder-gray-400'/>

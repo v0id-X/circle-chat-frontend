@@ -11,7 +11,6 @@ const RightSideBar = () => {
 
   const [msgImgs,setMsgImgs] = useState([])
 
-  // Helper function to handle opening Base64 images
   const handleImageClick = (content) => {
     if (!content) return;
     
@@ -37,7 +36,7 @@ const RightSideBar = () => {
       alert("Please allow popups to view images");
     }
   };
-  //extracting images from messages
+ 
   useEffect(()=>{
     setMsgImgs(
       messages.filter(msg => msg.image).map(msg=>msg.image)

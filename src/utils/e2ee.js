@@ -1,7 +1,6 @@
 
 import sodium from 'libsodium-wrappers-sumo';
     
-// Helper Functions
 export const toB64String = (data) => {
     return sodium.to_base64(data, sodium.base64_variants.ORIGINAL);
 };
@@ -18,8 +17,6 @@ export const toBinFromString = (data) => {
     return sodium.from_string(data);
 };
 
-// Cryptographic Functions
-
 export const generateAndWrapKeys = async (password) => {
 
     await sodium.ready;
@@ -31,14 +28,10 @@ export const generateAndWrapKeys = async (password) => {
     const MEM_LIMIT = sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE || 67108864;
     const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13 || 2;
 
-    // Generate the E2EE keypair
     const keypair = sodium.crypto_box_keypair();
-    
-    // Generate random salt and nonce
     const salt = sodium.randombytes_buf(SALT_LEN);
     const nonce = sodium.randombytes_buf(NONCE_LEN);
 
-    // Derive a secure wrapping key from the password
     const wrappingKey = sodium.crypto_pwhash(
         KEY_LEN,
         password,
@@ -48,10 +41,8 @@ export const generateAndWrapKeys = async (password) => {
         ALG
     );
 
-    // Wrap the private key
     const encryptedPrivateKey = sodium.crypto_secretbox_easy(keypair.privateKey, nonce, wrappingKey);
 
-    // Return as Base64 strings for the database
     return {
         publicKey: toB64String(keypair.publicKey),
         encryptedPrivateKey: toB64String(encryptedPrivateKey),
@@ -69,12 +60,10 @@ export const unwrapPrivateKey = async (password, saltB64, nonceB64, encryptedPri
     const MEM_LIMIT = sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE || 67108864;
     const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13 || 2;
 
-    // Convert Base64 back to binary
     const salt = toBinFromB64(saltB64);
     const nonce = toBinFromB64(nonceB64);
     const encryptedPrivateKey = toBinFromB64(encryptedPrivateKeyB64);
 
-    // Re-derive the wrapping key
     const wrappingKey = sodium.crypto_pwhash(
         KEY_LEN,
         password,
@@ -97,7 +86,7 @@ export const messageEncrypt = (message,receiverPublicKey,senderPrivateKey) =>{
     try{
         const nonce  = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES)
         const messageBuf = message
-        const cipherTextBuf = sodium.crypto_box_easy(      //return type: Uint8Array
+        const cipherTextBuf = sodium.crypto_box_easy(    
         messageBuf,
         nonce,
         receiverPublicKey,
@@ -105,7 +94,8 @@ export const messageEncrypt = (message,receiverPublicKey,senderPrivateKey) =>{
         )
         return {text:toB64String(cipherTextBuf),nonce:toB64String(nonce)}
     }catch(error){
-        return '{"text": "Message Cannot Be Encrypted"}'
+        console.error('Message encryption failed:', error)
+        return {text: null, nonce: null, error: true}
     }
     
     
@@ -124,7 +114,7 @@ export const messageDecrypt = (cipherText,nonce,senderPublicKey,receiverPrivateK
         )
 
         const plainText = toString(decryptedMessageBuf)
-        return plainText    //return type: string
+        return plainText  
     } catch (error) {
         return '{"text":"Unable to load message"}'
     }

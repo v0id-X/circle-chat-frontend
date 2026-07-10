@@ -8,8 +8,8 @@ import { useContext } from 'react'
 import { AuthContext } from '../context/AuthContext'
 
 const App = () => {
-  const {authUser} = useContext(AuthContext)
-  return (
+  const {authUser,isCheckingAuth} = useContext(AuthContext)
+    return (
     <div className="bg-[url(https://res.cloudinary.com/ddfq88vuc/image/upload/v1775591378/mac-bg_b4jvmk.jpg)] bg-cover bg-center bg-no-repeat h-screen w-screen">
       <Toaster />
       <Routes>
@@ -19,6 +19,8 @@ const App = () => {
       </Routes>
      </div>
   )
+  
+  
 }
 
 export default App

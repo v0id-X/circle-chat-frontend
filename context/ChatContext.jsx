@@ -20,7 +20,6 @@
 
         const {socket,axios,authUser,privateKey} = useContext(AuthContext)
 
-        //function to get all users for sidebar
         const getUsers = async() =>{
             try {
                 const {data} = await axios.get('/api/messages/users')
@@ -34,8 +33,6 @@
             }
         }
 
-
-        //function to get receiver's public key
         const getPublicKey = async (userId)=>{
             try {
                 const {data} = await axios.get(`/api/auth/get-public-key/${userId}?t=${Date.now()}`)
@@ -50,7 +47,6 @@
             }
         }
 
-        //helper function to get decrypted payload
         const fetchEncryptedData = async (url)=>{
             try {
                 if(url.startsWith('http')){
@@ -64,7 +60,6 @@
         }
 
         
-// function to get messages for a selected user
         const getMessages = async (userId,isLoadMore=false)=>{
 
             if(isLoadMore && !hasMore) return
@@ -143,7 +138,7 @@
                     if(!isLoadMore){
                     setUnseenmessages((prevUnseenMessages) => {
                         const updatedUnseen = { ...prevUnseenMessages };
-                        delete updatedUnseen[userId]; // Removes the unread count for this user
+                        delete updatedUnseen[userId]; 
                         return updatedUnseen;
                     });
                   }
@@ -156,7 +151,7 @@
         
     const sendMessage = async (messageData) => {
             try {
-                // This guarantees we never use a stale key if the user just logged in
+
                 const latestPublicKey = await getPublicKey(selectedUser._id);
                 
                 if (!latestPublicKey) {
@@ -166,19 +161,20 @@
 
                 const messageString = JSON.stringify(messageData);
                 
-                // Encrypt the JSON string using the LATEST key
                 const encrypted = messageEncrypt(
                     toBinFromString(messageString),
                     toBinFromB64(latestPublicKey), 
                     toBinFromB64(privateKey)
                 );
 
-                // THE ROUTER: Extract the ciphertext and nonce
-                // (Handling different possible outputs from your messageEncrypt function)
-                const cipherText = encrypted.text || encrypted.ciphertext || encrypted;
+                if (encrypted.error || !encrypted.text) {
+                    toast.error("Failed to encrypt message. Please try again.");
+                    return;
+                }
+
+                const cipherText = encrypted.text;
                 const nonce = encrypted.nonce;
 
-                // Safely route the gibberish/enc to the correct backend attribute
                 const payload = {
                     text: messageData.text ? cipherText : "",
                     image: messageData.image ? cipherText : "",
@@ -188,10 +184,10 @@
                 const {data} = await axios.post(`/api/messages/send/${selectedUser._id}`, payload);
                 
                 if(data.success){
-                    //Instantly update the UI with the unencrypted, readable message
+
                     const locallyReadableMessage = {
-                        ...data.newMessage, //gives database _id and createdAt
-                        ...messageData      //overwrites the encrypted payload with the real text/image
+                        ...data.newMessage, 
+                        ...messageData     
                     };
                     
                     setMessages((prevMessages) => [...prevMessages, locallyReadableMessage]);
@@ -204,7 +200,6 @@
         }
 
         
-        // function to subscribe to messages for selected user
         const messageSubscribe = async()=>{
             if(!socket) return
 
@@ -215,11 +210,11 @@
                     let readyNewMessage = newMessage
                 
                     if(selectedPublicKey && privateKey){
-                        // Grab the encrypted data from either text or image
+  
                         const encryptedData = newMessage.image || newMessage.text;
 
                         if (encryptedData && newMessage.nonce) {
-                            //First Decryption Attempt
+                
                             const encryptedResponse = newMessage.image ? await fetchEncryptedData(newMessage.image) : newMessage.text
 
                             if(!encryptedResponse) return
@@ -231,12 +226,11 @@
                                 toBinFromB64(privateKey)
                             )
 
-                            //If decryption failed due to a stale key then fetch the new one
-                            if (plainText.includes("previous login") || plainText.includes("Legacy Message")) {
+                            if (plainText.includes("Unable to load message")) {
                                 const freshPublicKey = await getPublicKey(newMessage.senderId);
                                 
                                 if (freshPublicKey) {
-                                    // Try again with the fresh key
+ 
                                     plainText = messageDecrypt(
                                         toBinFromB64(encryptedResponse),
                                         toBinFromB64(newMessage.nonce),
@@ -285,7 +279,6 @@
         }
 
 
-        //function to unsubscribe to messages
         const messageUnsubscribe = ()=>{
             if(socket){
                 socket.off("newMessage")
