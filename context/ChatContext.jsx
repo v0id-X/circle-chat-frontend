@@ -60,96 +60,105 @@
         }
 
         
-        const getMessages = async (userId,isLoadMore=false)=>{
+const getMessages = async (userId, isLoadMore = false) => {
+    if (isLoadMore && !hasMore) return
+    if (!userId) return
 
-            if(isLoadMore && !hasMore) return
+    const targetPublicKey = await getPublicKey(userId)
 
-            const targetPublicKey = await getPublicKey(userId)
-            
-            if(targetPublicKey){
-                setSelectedPublicKey(targetPublicKey)
-            } else {
-                console.warn("user has no key")
-            }
+    if (targetPublicKey) {
+        setSelectedPublicKey(targetPublicKey)
+    } else {
+        console.warn("user has no key")
+    }
 
-            try {
-               let url = `/api/messages/${userId}`
-               if(isLoadMore && messages.length > 0){
-                const oldestMessageId = messages[0]._id
-                url += `?cursor=${oldestMessageId}`
-               }
-
-               const {data} = await axios.get(url)
-                
-                if(data.success){
-                   
-                    if(data.messages.length < 20){
-                        setHasMore(false)
-                    } else if(!isLoadMore){
-                        setHasMore(true)
-                    }
-
-                    let readyMessages = data.messages 
-                    
-                    if(targetPublicKey && privateKey){
-                        readyMessages = await Promise.all(data.messages.map(async(msg)=>{
-                            if(!msg.nonce){
-                                return {
-                                    ...msg,
-                                    text: "Legacy Message"
-                                }
-                            }
-                            const encryptedData = msg.image || msg.text;
-
-                            if(encryptedData){
-
-                                const encryptedResponse = msg.image ? await fetchEncryptedData(msg.image) : msg.text
-
-                                if(!encryptedResponse) return
-
-                                const plainText = messageDecrypt(
-                                    toBinFromB64(encryptedResponse),
-                                    toBinFromB64(msg.nonce),
-                                    toBinFromB64(targetPublicKey),
-                                    toBinFromB64(privateKey)
-                                )
-
-                                let parsedData = {}
-                                try {
-                                    parsedData = JSON.parse(plainText)
-                                } catch (error) {
-                                    parsedData = { text: plainText }
-                                }
-
-                                return {
-                                    ...msg,
-                                    ...parsedData
-                                }
-                            }
-                            return msg;
-                        }))
-                    }
-                    if(isLoadMore){
-                        setMessages((prevMessages)=>[...readyMessages, ...prevMessages])
-                    } else{
-                        setMessages(readyMessages)
-                    }
-                    
-                    if(!isLoadMore){
-                    setUnseenmessages((prevUnseenMessages) => {
-                        const updatedUnseen = { ...prevUnseenMessages };
-                        delete updatedUnseen[userId]; 
-                        return updatedUnseen;
-                    });
-                  }
-                }
-            } catch (error) {
-                toast.error(error.message)
-            }
+    try {
+        let url = `/api/messages/${userId}`
+        const oldestMessageId = messages[0]?._id
+        if (isLoadMore && oldestMessageId) {
+            url += `?cursor=${oldestMessageId}`
         }
 
-        
-    const sendMessage = async (messageData) => {
+        const { data } = await axios.get(url)
+
+        if (data.success) {
+
+            if (data.messages.length < 20) {
+                setHasMore(false)
+            } else if (!isLoadMore) {
+                setHasMore(true)
+            }
+
+            let readyMessages = data.messages
+
+            if (targetPublicKey && privateKey) {
+                readyMessages = await Promise.all(data.messages.map(async (msg) => {
+                    if (!msg.nonce) {
+                        return {
+                            ...msg,
+                            text: "Legacy Message"
+                        }
+                    }
+
+                    const encryptedData = msg.image || msg.text
+
+                    if (encryptedData) {
+                        try {
+                            const encryptedResponse = msg.image ? await fetchEncryptedData(msg.image) : msg.text
+
+                            if (!encryptedResponse) {
+                                return { ...msg, text: "Unable to load message" }
+                            }
+
+                            const plainText = messageDecrypt(
+                                toBinFromB64(encryptedResponse),
+                                toBinFromB64(msg.nonce),
+                                toBinFromB64(targetPublicKey),
+                                toBinFromB64(privateKey)
+                            )
+
+                            let parsedData = {}
+                            try {
+                                parsedData = JSON.parse(plainText)
+                            } catch (error) {
+                                parsedData = { text: plainText }
+                            }
+
+                            return {
+                                ...msg,
+                                ...parsedData
+                            }
+                        } catch (error) {
+                            console.warn("Failed to decrypt message", msg._id, error.message)
+                            return { ...msg, text: "Unable to load message" }
+                        }
+                    }
+                    return msg
+                }))
+            }
+
+            readyMessages = readyMessages.filter(Boolean)
+
+            if (isLoadMore) {
+                setMessages((prevMessages) => [...readyMessages, ...prevMessages])
+            } else {
+                setMessages(readyMessages)
+            }
+
+            if (!isLoadMore) {
+                setUnseenmessages((prevUnseenMessages) => {
+                    const updatedUnseen = { ...prevUnseenMessages }
+                    delete updatedUnseen[userId]
+                    return updatedUnseen
+                })
+            }
+        }
+    } catch (error) {
+        toast.error(error.message)
+    }
+}
+
+        const sendMessage = async (messageData) => {
             try {
 
                 const latestPublicKey = await getPublicKey(selectedUser._id);
@@ -160,7 +169,6 @@
                 }
 
                 const messageString = JSON.stringify(messageData);
-                
                 const encrypted = messageEncrypt(
                     toBinFromString(messageString),
                     toBinFromB64(latestPublicKey), 
@@ -184,41 +192,40 @@
                 const {data} = await axios.post(`/api/messages/send/${selectedUser._id}`, payload);
                 
                 if(data.success){
-
-                    const locallyReadableMessage = {
-                        ...data.newMessage, 
-                        ...messageData     
-                    };
-                    
-                    setMessages((prevMessages) => [...prevMessages, locallyReadableMessage]);
-                } else {
-                    toast.error(data.message);
-                }
+                const locallyReadableMessage = {
+                ...data.newMessage,
+                text: messageData.text || "",
+                image: messageData.image || "",
+            };
+                setMessages((prevMessages) => [...prevMessages, locallyReadableMessage]);
+        } else { 
+            toast.error(data.message);
+        }
             } catch (error) {
                 toast.error(error.message);
             }
         }
 
-        
-        const messageSubscribe = async()=>{
-            if(!socket) return
+    const messageSubscribe = async () => {
+    if (!socket) return
 
-            socket.on("newMessage", async (newMessage) => { 
-                if(selectedUser && newMessage.senderId === selectedUser._id){
+    socket.on("newMessage", async (newMessage) => {
+        if (selectedUser && newMessage.senderId === selectedUser._id) {
 
-                    newMessage.seen = true
-                    let readyNewMessage = newMessage
-                
-                    if(selectedPublicKey && privateKey){
-  
-                        const encryptedData = newMessage.image || newMessage.text;
+            newMessage.seen = true
+            let readyNewMessage = newMessage
 
-                        if (encryptedData && newMessage.nonce) {
-                
-                            const encryptedResponse = newMessage.image ? await fetchEncryptedData(newMessage.image) : newMessage.text
+            if (selectedPublicKey && privateKey) {
 
-                            if(!encryptedResponse) return
+                const encryptedData = newMessage.image || newMessage.text
 
+                if (encryptedData && newMessage.nonce) {
+                    try {
+                        const encryptedResponse = newMessage.image ? await fetchEncryptedData(newMessage.image) : newMessage.text
+
+                        if (!encryptedResponse) {
+                            readyNewMessage = { ...newMessage, text: "Unable to load message" }
+                        } else {
                             let plainText = messageDecrypt(
                                 toBinFromB64(encryptedResponse),
                                 toBinFromB64(newMessage.nonce),
@@ -227,50 +234,53 @@
                             )
 
                             if (plainText.includes("Unable to load message")) {
-                                const freshPublicKey = await getPublicKey(newMessage.senderId);
-                                
+                                const freshPublicKey = await getPublicKey(newMessage.senderId)
+
                                 if (freshPublicKey) {
- 
                                     plainText = messageDecrypt(
                                         toBinFromB64(encryptedResponse),
                                         toBinFromB64(newMessage.nonce),
                                         toBinFromB64(freshPublicKey),
                                         toBinFromB64(privateKey)
-                                    );
-                                    setSelectedPublicKey(freshPublicKey); 
+                                    )
+                                    setSelectedPublicKey(freshPublicKey)
                                 }
                             }
-                            let parsedData = {};
+
+                            let parsedData = {}
                             try {
-                                parsedData = JSON.parse(plainText);
+                                parsedData = JSON.parse(plainText)
                             } catch (error) {
-                                parsedData = { text: plainText }; 
+                                parsedData = { text: plainText }
                             }
-                            
-                            readyNewMessage = {...newMessage, ...parsedData};
+
+                            readyNewMessage = { ...newMessage, ...parsedData }
                         }
-
-                        
+                    } catch (error) {
+                        console.warn("Failed to decrypt incoming message", newMessage._id, error.message)
+                        readyNewMessage = { ...newMessage, text: "Unable to load message" }
                     }
-
-                    setMessages((prevMessages)=>[...prevMessages, readyNewMessage])
-                    axios.put(`/api/messages/mark/${newMessage._id}`)
-                } else {
-                    setUnseenmessages((prevUnseenMessages)=>({
-                        ...prevUnseenMessages, 
-                        [newMessage.senderId] : prevUnseenMessages[newMessage.senderId] ? prevUnseenMessages[newMessage.senderId] +1 : 1
-                    }))
                 }
-            })
+            }
 
-            socket.on("Typing", ({senderId})=>{
-                setTypingUsers((prev)=>({...prev, [senderId] : true}))
-            })
-
-            socket.on("StoppedTyping", ({senderId})=>{
-                setTypingUsers((prev)=>({...prev, [senderId] : false}))
-            })
+            setMessages((prevMessages) => [...prevMessages, readyNewMessage])
+            axios.put(`/api/messages/mark/${newMessage._id}`)
+        } else {
+            setUnseenmessages((prevUnseenMessages) => ({
+                ...prevUnseenMessages,
+                [newMessage.senderId]: prevUnseenMessages[newMessage.senderId] ? prevUnseenMessages[newMessage.senderId] + 1 : 1
+            }))
         }
+    })
+
+    socket.on("Typing", ({ senderId }) => {
+        setTypingUsers((prev) => ({ ...prev, [senderId]: true }))
+    })
+
+    socket.on("StoppedTyping", ({ senderId }) => {
+        setTypingUsers((prev) => ({ ...prev, [senderId]: false }))
+    })
+}
 
             const sendTypingStatus = (receiverId, isTyping) =>{
             if(!socket || !receiverId) return 

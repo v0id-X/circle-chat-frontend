@@ -44,26 +44,23 @@ const ChatContainer = () => {
       reader.readAsDataURL(file)
   }
 
-   const handleScroll = async () =>{
+const handleScroll = async () => {
+    if (isFetching.current || !selectedUser) return
 
-    if(isFetching.current) return
-
-    if(chatBoxRef.current.scrollTop === 0){
-
+    if (chatBoxRef.current.scrollTop === 0) {
         isFetching.current = true
-
         const previousHeight = chatBoxRef.current.scrollHeight
 
-        await getMessages(selectedUser._id,true)
+        await getMessages(selectedUser._id, true)
 
-        setTimeout(()=>{
-            if(chatBoxRef.current){
+        setTimeout(() => {
+            if (chatBoxRef.current) {
                 chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight - previousHeight
             }
             isFetching.current = false
-        },0)
+        }, 0)
     }
-   }
+}
 
 
   useEffect(()=>{

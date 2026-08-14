@@ -17,6 +17,7 @@ export const toBinFromString = (data) => {
     return sodium.from_string(data);
 };
 
+
 export const generateAndWrapKeys = async (password) => {
 
     await sodium.ready;
@@ -29,6 +30,7 @@ export const generateAndWrapKeys = async (password) => {
     const ALG = sodium.crypto_pwhash_ALG_ARGON2ID13 || 2;
 
     const keypair = sodium.crypto_box_keypair();
+    
     const salt = sodium.randombytes_buf(SALT_LEN);
     const nonce = sodium.randombytes_buf(NONCE_LEN);
 
@@ -86,7 +88,7 @@ export const messageEncrypt = (message,receiverPublicKey,senderPrivateKey) =>{
     try{
         const nonce  = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES)
         const messageBuf = message
-        const cipherTextBuf = sodium.crypto_box_easy(    
+        const cipherTextBuf = sodium.crypto_box_easy(      //return type: Uint8Array
         messageBuf,
         nonce,
         receiverPublicKey,
@@ -94,6 +96,7 @@ export const messageEncrypt = (message,receiverPublicKey,senderPrivateKey) =>{
         )
         return {text:toB64String(cipherTextBuf),nonce:toB64String(nonce)}
     }catch(error){
+        
         console.error('Message encryption failed:', error)
         return {text: null, nonce: null, error: true}
     }
@@ -114,7 +117,7 @@ export const messageDecrypt = (cipherText,nonce,senderPublicKey,receiverPrivateK
         )
 
         const plainText = toString(decryptedMessageBuf)
-        return plainText  
+        return plainText   
     } catch (error) {
         return '{"text":"Unable to load message"}'
     }
